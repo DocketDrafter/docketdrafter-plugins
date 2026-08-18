@@ -1,0 +1,107 @@
+{
+  "name": "docketdrafter",
+  "owner": {
+    "name": "DocketDrafter",
+    "email": "tommy@docketdrafter.com"
+  },
+  "description": "Public legal-research plugins from DocketDrafter",
+  "plugins": [
+    {
+      "name": "us-code",
+      "version": "0.2.0",
+      "source": "./plugins/us-code",
+      "description": "Look up, search, quote, and compare the United States Code using a verified local corpus downloaded on first use",
+      "category": "Legal",
+      "tags": [
+        "us-code",
+        "statutes",
+        "legal-research",
+        "federal-law"
+      ]
+    },
+    {
+      "name": "ny-laws",
+      "version": "0.2.0",
+      "source": "./plugins/ny-laws",
+      "description": "Look up and search New York statutes, the state constitution, NYC Administrative Code, and selected court rules using a verified local corpus downloaded on first use",
+      "category": "Legal",
+      "tags": [
+        "new-york",
+        "statutes",
+        "court-rules",
+        "legal-research",
+        "nyc-administrative-code"
+      ]
+    },
+    {
+      "name": "fl-laws",
+      "version": "0.2.0",
+      "source": "./plugins/fl-laws",
+      "description": "Look up and search Florida Statutes, the state constitution, and statewide court rules using a verified local corpus downloaded on first use",
+      "category": "Legal",
+      "tags": [
+        "florida",
+        "statutes",
+        "constitution",
+        "court-rules",
+        "legal-research"
+      ]
+    },
+    {
+      "name": "in-laws",
+      "version": "0.2.0",
+      "source": "./plugins/in-laws",
+      "description": "Look up and search the Indiana Code and Indiana Constitution using a verified local corpus downloaded on first use",
+      "category": "Legal",
+      "tags": [
+        "indiana",
+        "statutes",
+        "constitution",
+        "legal-research"
+      ]
+    },
+    {
+      "name": "il-laws",
+      "version": "0.2.0",
+      "source": "./plugins/il-laws",
+      "description": "Look up and search Illinois Compiled Statutes and Illinois Supreme Court Rules using a verified local corpus downloaded on first use",
+      "category": "Legal",
+      "tags": [
+        "illinois",
+        "ilcs",
+        "statutes",
+        "supreme-court-rules",
+        "legal-research"
+      ]
+    },
+    {
+      "name": "oh-laws",
+      "version": "0.2.0",
+      "source": "./plugins/oh-laws",
+      "description": "Look up and search the Ohio Revised Code and Ohio Constitution using a verified local corpus downloaded on first use",
+      "category": "Legal",
+      "tags": [
+        "ohio",
+        "revised-code",
+        "statutes",
+        "constitution",
+        "legal-research"
+      ]
+    },
+    {
+      "name": "federal-court-rules",
+      "version": "0.2.0",
+      "source": "./plugins/federal-court-rules",
+      "description": "Look up and search federal procedural and evidence rules plus selected district local and ECF rules using a verified local corpus downloaded on first use",
+      "category": "Legal",
+      "tags": [
+        "federal-court-rules",
+        "frcp",
+        "frap",
+        "fre",
+        "local-rules",
+        "legal-research"
+      ]
+    }
+  ]
+}

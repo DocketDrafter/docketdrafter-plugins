@@ -1,0 +1,68 @@
+{
+  "manifest_version": "0.4",
+  "name": "courtlistener",
+  "display_name": "CourtListener by DocketDrafter",
+  "version": "0.0.7",
+  "description": "Search CourtListener opinions and RECAP dockets, download public court materials, and reuse a persistent local research library.",
+  "long_description": "Connects Claude to CourtListener, the free public database of American court opinions and PACER filings maintained by the Free Law Project. Opinions and PDFs are saved to a persistent research library folder on this computer so they can be reused across conversations.\n\nRequires a free CourtListener API key. Create or view yours at https://www.courtlistener.com/profile/api-token/",
+  "author": {
+    "name": "DocketDrafter",
+    "email": "tommy@docketdrafter.com",
+    "url": "https://docketdrafter.com"
+  },
+  "homepage": "https://github.com/DocketDrafter/docketdrafter-plugins",
+  "documentation": "https://github.com/DocketDrafter/docketdrafter-plugins#courtlistener",
+  "license": "BSD-3-Clause",
+  "keywords": [
+    "courtlistener",
+    "legal-research",
+    "case-law",
+    "recap",
+    "legal"
+  ],
+  "server": {
+    "type": "uv",
+    "entry_point": "server/server.py",
+    "mcp_config": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "${__dirname}",
+        "server/server.py"
+      ],
+      "env": {
+        "COURTLISTENER_API_KEY": "${user_config.api_key}",
+        "COURTLISTENER_DATA_DIR": "${user_config.library_dir}",
+        "PYTHONUNBUFFERED": "1"
+      }
+    }
+  },
+  "user_config": {
+    "api_key": {
+      "type": "string",
+      "title": "CourtListener API Key",
+      "description": "Your free CourtListener API token. Get one at https://www.courtlistener.com/profile/api-token/ \u2014 it is stored in your operating system's keychain, not in your conversations.",
+      "sensitive": true,
+      "required": true
+    },
+    "library_dir": {
+      "type": "directory",
+      "title": "CourtListener Library Folder",
+      "description": "Where downloaded opinions and court PDFs are saved. Reserve this folder for material downloaded from CourtListener.",
+      "default": "${HOME}/Documents/CourtListener Library",
+      "required": false
+    }
+  },
+  "compatibility": {
+    "claude_desktop": ">=0.10.0",
+    "platforms": [
+      "darwin",
+      "win32",
+      "linux"
+    ],
+    "runtimes": {
+      "python": ">=3.10"
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "fl-laws",
+  "displayName": "Florida Laws",
+  "version": "0.2.0",
+  "description": "Look up and search Florida Statutes, the Florida Constitution, and statewide Florida court rules using a verified local corpus downloaded on first use",
+  "author": {
+    "name": "DocketDrafter",
+    "email": "tommy@docketdrafter.com",
+    "url": "https://github.com/tommy-docketdrafter"
+  },
+  "homepage": "https://github.com/DocketDrafter/docketdrafter-plugins",
+  "repository": "https://github.com/DocketDrafter/docketdrafter-plugins",
+  "license": "BSD-3-Clause",
+  "keywords": [
+    "florida",
+    "statutes",
+    "constitution",
+    "court-rules",
+    "legal-research"
+  ]
+}

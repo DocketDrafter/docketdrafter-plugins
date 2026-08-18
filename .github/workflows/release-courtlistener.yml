@@ -1,0 +1,100 @@
+# Builds and publishes the CourtListener .mcpb whenever the connector changes
+# on master with a version that has no release yet.
+#
+# The README links customers to releases/latest/download/courtlistener.mcpb,
+# while the marketplace serves git head. Without this workflow those two
+# artifacts drift apart the first time someone forgets a manual release.
+#
+# Versioning contract: any user-visible connector change bumps "version" in
+# plugins/courtlistener/mcp/manifest.json. A push that changes connector files
+# without bumping the version fails this workflow rather than silently leaving
+# the published extension stale.
+
+name: Release CourtListener extension
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "plugins/courtlistener/mcp/**"
+      - "tools/courtlistener/**"
+      - ".github/workflows/release-courtlistener.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Install locked runtime dependencies
+        run: uv sync --locked --project plugins/courtlistener/mcp
+
+      - name: Run unit tests
+        run: uv run --project plugins/courtlistener/mcp python tools/courtlistener/test_courtlistener.py
+
+      - name: Run smoke test (offline checks)
+        run: uv run --project plugins/courtlistener/mcp python tools/courtlistener/smoke_test.py
+
+      - name: Read connector version
+        id: version
+        run: |
+          VERSION=$(python3 -c "import json; print(json.load(open('plugins/courtlistener/mcp/manifest.json'))['version'])")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=courtlistener-v$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Check whether this version is already released
+        id: exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "${{ steps.version.outputs.tag }}" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "released=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "released=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Fail if connector changed without a version bump
+        if: steps.exists.outputs.released == 'true'
+        run: |
+          # Allow tooling-only changes through; require a bump when the
+          # connector itself changed relative to the released tag.
+          if git diff --quiet "${{ steps.version.outputs.tag }}" HEAD -- plugins/courtlistener/mcp; then
+            echo "Connector unchanged since ${{ steps.version.outputs.tag }}; nothing to release."
+          else
+            echo "::error::plugins/courtlistener/mcp changed but manifest.json still says ${{ steps.version.outputs.version }}, which is already released. Bump the version."
+            exit 1
+          fi
+
+      - name: Build the bundle
+        if: steps.exists.outputs.released == 'false'
+        run: python3 tools/courtlistener/build_mcpb.py
+
+      - name: Validate the manifest
+        if: steps.exists.outputs.released == 'false'
+        run: npx --yes @anthropic-ai/mcpb validate dist/courtlistener/manifest.json
+
+      - name: Publish the release
+        if: steps.exists.outputs.released == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          SHA256=$(sha256sum dist/courtlistener.mcpb | cut -d' ' -f1)
+          gh release create "${{ steps.version.outputs.tag }}" dist/courtlistener.mcpb \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "CourtListener by DocketDrafter v${{ steps.version.outputs.version }}" \
+            --notes "**Download \`courtlistener.mcpb\` below — it's the only file you need.** The \"Source code\" archives are added automatically by GitHub; ignore them.
+
+          Open the downloaded file with Claude Desktop (double-click it), enter your CourtListener API key and library folder in the install dialog, and enable the extension.
+
+          \`\`\`
+          sha256: $SHA256
+          \`\`\`"

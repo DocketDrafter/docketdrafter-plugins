@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "federal-court-rules",
+  "displayName": "Federal Court Rules",
+  "version": "0.2.0",
+  "description": "Look up and search federal procedural and evidence rules plus selected district local and ECF rules using a verified local corpus downloaded on first use",
+  "author": {
+    "name": "DocketDrafter",
+    "email": "tommy@docketdrafter.com",
+    "url": "https://github.com/tommy-docketdrafter"
+  },
+  "homepage": "https://github.com/DocketDrafter/docketdrafter-plugins",
+  "repository": "https://github.com/DocketDrafter/docketdrafter-plugins",
+  "license": "BSD-3-Clause",
+  "keywords": [
+    "federal-court-rules",
+    "frcp",
+    "frap",
+    "fre",
+    "local-rules",
+    "legal-research"
+  ]
+}

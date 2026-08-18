@@ -1,0 +1,25 @@
+.DS_Store
+.idea/
+.env
+.venv/
+__pycache__/
+*.py[cod]
+dist/
+data/
+.courtlistener/
+settings
+
+# Raw OLRC downloads used to rebuild the bundled U.S. Code corpus.
+tools/us-code/data/
+
+# Raw Ohio Laws HTML used to rebuild the bundled Ohio corpus.
+tools/oh-laws/data/
+
+# CourtListener MCP dependencies and license bundles are generated only while
+# building the self-contained .mcpb; do not commit them to the source tree.
+plugins/courtlistener/mcp/vendor/
+plugins/courtlistener/mcp/THIRD_PARTY_LICENSES/
+plugins/courtlistener/mcp/THIRD_PARTY_NOTICES.md
+
+dist/
+docs/plans/

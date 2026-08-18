@@ -1,0 +1,221 @@
+Advanced Query Techniques and Operators
+CourtListener's search engine is powered by the Citegeist™ relevance engine, which supports highly advanced Boolean operators. These allow you to build a complex search that can be run across our entire corpus: from Case Law and the RECAP Archive, to Financial Disclosures and fully searchable Oral Arguments transcripts.
+
+If you would like assistance crafting a query, let us know. We can sometimes help.
+
+Intersections: AND or &
+This connector is used by default, and so is not usually needed. However, some operators, like the negation operator, can change the default operator to OR. Therefore, in more complicated queries it is good practice to explicitly intersect your tokens by using the AND or & operator between all words e.g:
+
+(immigration AND asylum) AND (border OR patrol) or
+
+(immigration & asylum) & (border OR patrol)
+
+Unions: OR
+Creates an OR comparison between words (e.g. immigration OR asylum).
+
+Negation/Exclusion: -
+Requires that a word or phrase be excluded from the returned results. For example, this finds documents containing "immigration" but not "border patrol":
+
+immigration -"border patrol"
+
+This operator makes other tokens in your query fuzzy. Therefore, to do a boolean search, use the intersection operator (AND) between all your other tokens. For example, this searches for items containing both "immigration" and "border," but not "border patrol":
+
+immigration AND border AND -"border patrol"
+
+This query does "immigration" or "border" but not "border patrol":
+
+immigration border -"border patrol".
+
+But not : NOT or %
+The NOT operator or % serves as an alternative way to exclude terms from your search results. This operator is particularly useful when combined with other boolean operators or grouped queries to refine your search precision:
+
+"border patrol" NOT (immigration OR asylum) or
+
+"border patrol" % (immigration OR asylum)
+
+Phrase and Exact Queries: " "
+Creates a phrase search (e.g. "border patrol").
+
+You can also use " " to perform an exact query, which will not apply stemming or match synonyms.
+
+For instance: "Inform" people will return results containing only inform and people, thus avoiding results that include information. Conversely, "Information" people, will exclude results containing inform.
+
+It's important to notice that a phrase query behaves as an exact query for each term within the phrase. Therefore, avoid nesting quotes, such as ""Inform" people" as all the quotes will be ignored.
+
+In the case that quotation marks are not balanced (i.e. there is an odd number of them), they will be ignored.
+
+Grouped Queries and subqueries: ( )
+Using parentheses will group parts of a query (e.g. (customs OR "border patrol") AND asylum). Parentheses can be nested as deeply as needed.
+
+Wildcards and Fuzzy Search: *, !, ? and ~
+Using an asterisk (*) allows for wildcard searches. For example, immigra* finds all words that begin with "immigra". Alternatively, you can use an exclamation mark (!) at the beginning of a word for the same purpose. For instance, !immigra matches words that start with "immigra".
+
+* can also be used inside words, where it acts as a single-character wildcard. For example, a query like gr*mm*r would match cases containing both "grammar" and "grimmer".
+
+The question mark character (?) can be used similarly as a single-character wildcard. Unlike *, it is allowed at the beginning of words. For example, this would find cases containing the word "immigrant" or "emmigration": ?mmigra*.
+
+Fuzzy search can be applied using the tilde character (~) after a word. This is an advanced parameter that allows searches for misspellings or variations in a word's spelling. For example, searching for immigrant~ would find words similar to "immigrant." Values can also be added after the tilde to specify the maximum number of changes allowed, where a change refers to the insertion, deletion, substitution of a single character, or transposition of two adjacent characters. The default value, if none is given, is 2. Allowed values are 1 and 2. Fuzzy searches tend to broaden the result set, thus lowering precision, but also casting a wider net.
+
+Disallowed Wildcards
+The following types of wildcard queries are disabled due to performance issues:
+
+* at the beginning of terms
+Queries like *ing are disallowed because they require examining all terms in the index, which is highly resource-intensive.
+
+Multiple endings with * or ! in short terms
+Queries that match multiple endings are only allowed if the base word has at least three characters. Therefore, queries like a*, bc*, !a, or !bc are disallowed due to performance issues.
+
+Performing a query like these will throw an error with the message:
+
+The query contains a disallowed wildcard pattern.
+
+Proximity: ~
+Using a tilde character (~) after a phrase will ensure that the words in the phrase are within a desired distance of each other. For example "border fence"~50 would find the words border and fence within 50 words of each other.
+
+Range Queries: [ ]
+Ranges can be queried by using brackets. For example, a search for [1939 TO 1945] would find all cases that contained the numbers 1939 to 1945, inclusive. Range queries can also be fielded, allowing searches like citation:([22 TO 23] F2), which would find all cases from volumes 22 and 23 of the second series of the Federal Reporter. In range queries, an asterisk can be used to indicate no upper or lower limit, for example page_count:[200 TO *] would find all items with more than 200 pages. The word 'TO' must be uppercase.
+
+Date Queries
+Date queries require the ISO-8601 standard date formatting. This means that dates must be formatted as follows:
+
+YYYY-MM-DD
+
+In English that's year-month-day. For example, here's a date range that finds all docket filings from October 2018:
+
+dateFiled:[2018-10-01 TO 2018-10-31]
+
+Fielded Queries: fieldname:term
+In addition to being able to place fielded searches in the side bar, advanced users can also place fielded searches in their main query. For example, a search for court_id:ca1 status:precedential would return only precedential cases (status:precedential)in the First Circuit of Federal Appeals (court_id:ca1).
+
+Parentheses can be used to create more complex queries. Or multi-terms queries. For example: casename:(wade OR roe) would find cases containing "wade" or "roe" in the name of the case. casename:(Roe v. Wade) would find cases containing all the terms provided, equivalent to "Roe" AND "v." AND "Wade".
+
+Different search interfaces support different fields according to the following two tables:
+
+Opinions:
+docket_id	The ID of the docket that the item is associated with.
+scdb_id	The ID of an opinion in the Supreme Court Database.
+cluster_id	A single case can have dissents, concurrences and other types of opinions. We call these 'clusters'. This is the ID of the cluster that an opinion is part of. See also: sibling_ids
+sibling_ids	The ID of other opinions within a cluster.
+court_id	This is the abbreviated court ID associated with the item. See the jurisdictions page for a current list of abbreviations. For judge search, see the court field for an alternate approach.
+attorney	The attorneys that argued the case.
+author_id	The ID of the judge that authored an opinion.
+panel_ids	The IDs of the judges on a panel for a case.
+panel_names	The full name of the judges on a panel for a case.
+joined_by_ids	The IDs of the judges joining an author in an opinion.
+judge	A full-text searchable field containing the judge name, if known. This can be useful for judges that do not yet have an ID in our database.
+per_curiam	Whether an opinion was written per curiam.
+dateFiled	The date the decision was issued by the court.
+dateArgued	The date that a case was first argued.
+dateReargued	The date that a case was reargued.
+dateReargumentDenied	The date a that a motion for reargument was denied.
+caseName	The name of the case.
+docketNumber	The docket number for a case.
+citation	An all-encompassing field containing all of the citations for an opinion.
+neutralCite	The neutral citation for an opinion, if known.
+lexisCite	The citation for a case within LexisNexis's database.
+suitNature	The nature of suit for a case.
+citeCount	The number of times an opinion has been cited. This field can accept range queries.
+status	The precedential status of a case. Valid entries for this field are published, unpublished, errata, separate, in-chambers, relating-to, unknown
+cites	All of the item IDs that cite an opinion.
+type	The Opinion type. Valid entries for this field are combined-opinion, unanimous-opinion, lead-opinion, plurality-opinion, concurrence-opinion, in-part-opinion, dissent, addendum, remittitur, rehearing, on-the-merits, on-motion-to-strike.
+procedural_history	The history of the case as it jumped from court to court.
+posture	The procedural posture of the case.
+syllabus	A summary of the issues presented in the case and the "outcome."
+non_participating_judge_ids	The judges that heard the case, but did not participate in the opinion
+source	The source of the cluster. Valid entries for this field are:
+C for "court website",
+R for "public.resource.org",
+CR for "court website merged with resource.org",
+L for "lawbox",
+LC for "lawbox merged with court",
+LR for "lawbox merged with resource.org",
+LCR for "lawbox merged with court and resource.org",
+M for "manual input",
+A for "internet archive",
+H for "brad heath archive",
+Z for "columbia archive",
+U for "Harvard, Library Innovation Lab Case Law Access Project",
+CU for "court website merged with Harvard",
+D for "direct court input",
+Q for "2020 anonymous database",
+QU for "2020 anonymous database merged with Harvard",
+CRU for "court website merged with public.resource.org and Harvard",
+DU for "direct court input merged with Harvard",
+LU for "lawbox merged with Harvard",
+LCU for "Lawbox merged with court website and Harvard",
+LRU for "Lawbox merged with public.resource.org and with Harvard",
+LCRU for "Lawbox merged with court website",
+CRU for "public.resource.org and Harvard",
+MU for "Manual input merged with Harvard",
+RU for "public.resource.org merged with Harvard",
+ZA for "columbia merged with internet archive",
+ZD for "columbia merged with direct court input",
+ZC for "columbia merged with court",
+ZH for "columbia merged with brad heath archive",
+ZLC for "columbia merged with lawbox and court",
+ZLR for "columbia merged with lawbox and resource.org",
+ZLCR for "columbia merged with lawbox, court, and resource.org",
+ZR for "columbia merged with resource.org",
+ZCR for "columbia merged with court and resource.org",
+ZL for "columbia merged with lawbox",
+ZM for "columbia merged with manual input",
+ZQ for "columbia merged with 2020 anonymous database",
+ZU for "columbia archive merged with Harvard",
+ZLU for "columbia archive merged with Lawbox and Harvard",
+ZDU for "columbia archive merged with direct court input and Harvard",
+ZLRU for "columbia archive merged with lawbox, public.resource.org and Harvard",
+ZLCRU for "columbia archive merged with lawbox, court website, public.resource.org and Harvard",
+ZCU for "columbia archive merged with court website and Harvard",
+ZMU for "columbia archive merged with manual input and Harvard",
+ZRU for "columbia archive merged with public.resource.org and Harvard",
+ZLCU for "columbia archive merged with lawbox, court website and Harvard"
+Related opinions related:<id>
+Find opinions whose content is most related to the content of the given opinion. Replace <id> with the ID of the opinion for which you want to retrieve related opinions. The opinion ID can be found in the URL of the corresponding opinion: courtlistener.com/opinion/<id>/...
+
+Alternatively, you can navigate to the targeted opinion and click on  in the Related Opinions section.
+
+
+RECAP:
+id	The ID of the item in the CourtListener system.
+docket_id	The ID of the docket that the item is associated with.
+docket_entry_id	The ID of the docket entry that the item is associated with.
+court_id	This is the abbreviated court ID associated with the item. See the jurisdictions page for a current list of abbreviations. For judge search, see the court field for an alternate approach.
+party	The name of the parties in a PACER case. Can have multiple values.*
+attorney	The name of the attorneys in a PACER case. Can have multiple values.*
+firm_id	The ID of a firm in a PACER case. Can have multiple values.
+firm	The name of a firm in a PACER case. Can have multiple values.
+assigned_to_id	The IDs of the judges joining an author in an opinion.
+referred_to_id	The ID of the judge a case is referred to. See also: referredTo
+assignedTo	A full-text searchable field containing the judge name a case was assigned to. This can be useful for judges that do not yet have an ID in our database. See also: assigned_to_id
+referredTo	A full-text searchable field containing the judge name a case was referred to. This can be useful for judges that do not yet have an ID in our database. See also: referred_to_id
+dateFiled	The date the case was initiated.
+entry_date_filed	The date of a document entry in the PACER docket.
+dateArgued	The date that a case was first argued.
+dateTerminated	The date that a case was terminated in PACER.
+caseName	The name of the case.
+docketNumber	The docket number for a case.
+suitNature	The nature of suit for a case.
+document_type	Whether an item in the RECAP Archive is a document or an attachment. Allowed values are PACER Document or Attachment
+document_number	The document number of the item on the PACER docket.
+attachment_number	The attachment number of the item on the PACER docket.
+is_available	Whether a document is in the RECAP Archive.
+page_count	The number of pages in a PACER document. See "Range Queries" for more information on getting documents above or below a certain length.
+description	The description of a PACER document from the docket entry.
+short_description	The short description of a PACER document from the download document page.
+cause	The cause of action for a case in PACER.
+juryDemand	The jury demand for a case in PACER.
+jurisdictionType	The "jurisdiction" value found in PACER docket reports. For example, 'Diversity' or 'U.S. Government Defendant'.
+chapter	In bankruptcy dockets, the chapter the bankruptcy is currently filed under.
+trustee_str	In bankruptcy dockets, the name of the trustee handling the case.
+entry_number	The entry number on the PACER docket page. For appellate cases, this may be the internal PACER ID for the document, when an entry ID is otherwise unavailable.
+pacer_doc_id	The internal ID of the document in PACER.
+plain_text	The plain text of the document after extraction.
+* party and attorney values are associated with dockets, not filings. Therefore, avoid combining non-docket fields with party and attorney in the main query box, as such combinations won't yield any results. For example, a query like:
+
+party:(Party Name) AND attorney:(Attorney) AND description:(some description)
+Will not return any results. To achieve the desired results, utilize filters available in the sidebar:
+
+Document Description: "some description"
+Party Name: "The party name"
+Attorney Name: "The attorney name"
+This approach will retrieve filings that match the specified document description in dockets with the specified parties and attorneys.
