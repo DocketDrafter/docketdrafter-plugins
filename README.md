@@ -32,12 +32,25 @@ After updating CourtListener, quit and reopen Claude and start a new conversatio
 
 ### Statutes and court rules
 
+> [!IMPORTANT]
+> **Allow corpus downloads before using these plugins.** In Claude, open
+> **Settings → Capabilities → Domain allowlist**, then either:
+>
+> - Add `public-corpora.docketdrafter.com` under **Additional allowed domains**
+>   (recommended); or
+> - Change the domain allowlist dropdown to **All domains**.
+>
+> Without one of these settings, Claude Cowork cannot download the legal corpus and the plugin
+> will not work. If **All domains** is already selected, you do not need to add the hostname.
+
+![Claude Settings showing public-corpora.docketdrafter.com under Additional allowed domains](assets/claude-corpus-domain-allowlist.png)
+
 1. Open **Customize** in Claude Cowork and select **Plugins**.
 2. Add a marketplace from a repository.
 3. Enter `DocketDrafter/docketdrafter-plugins`.
 4. Install and enable the plugins you want.
 
-The U.S. Code, New York Laws, Florida Laws, Indiana Laws, Illinois Laws, Ohio Laws, and Federal Court Rules plugins require no API keys. Each installs its verified corpus on first use and then works locally.
+The U.S. Code, New York Laws, Florida Laws, Indiana Laws, Illinois Laws, Ohio Laws, and Federal Court Rules plugins require no API keys. On first use, each downloads and verifies its corpus from `public-corpora.docketdrafter.com`; afterward, it uses the installed local copy.
 
 > **First-time setup note — if you see "Failed to add marketplace," nothing is actually
 > broken.** Our plugin catalog is large, and Claude sometimes stops waiting before it finishes
