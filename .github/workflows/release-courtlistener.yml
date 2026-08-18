@@ -13,6 +13,7 @@
 name: Release CourtListener extension
 
 on:
+  workflow_dispatch:
   push:
     branches: [master]
     paths:
