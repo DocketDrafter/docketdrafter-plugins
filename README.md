@@ -76,11 +76,13 @@ Requires Python 3.10+ and [UV](https://docs.astral.sh/uv/). Research is saved to
 stored in Claude Code's local MCP configuration; the desktop extension instead keeps it in
 your operating system's keychain.
 
-**Getting updates.** Statute corpora receive periodic refreshes. Enable auto-update for this
-marketplace to receive them automatically, or run `/plugin update <name>` any time. Plugin
-content is served from
-[docketdrafter-plugin-content](https://github.com/DocketDrafter/docketdrafter-plugin-content) —
-installs fetch only the plugin you choose, pinned to an exact reviewed commit.
+**Corpus sources and updates.** This marketplace contains only the lightweight reader skills.
+The canonical, version-controlled corpus data and the scripts used to build it are public in
+[docketdrafter-plugin-content](https://github.com/DocketDrafter/docketdrafter-plugin-content).
+On first use, each reader resolves the latest reviewed corpus release and downloads a
+checksum-verified, immutable artifact from DocketDrafter's public corpus bucket. Once installed
+in an environment, that corpus remains local and is not automatically refreshed. A fresh Cowork
+session receives the latest published corpus without requiring a skill or marketplace update.
 
 ## Available plugins
 
