@@ -11,7 +11,7 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-BUCKET_BASE = "https://docketdrafter-public-corpora.s3.us-east-2.amazonaws.com"
+BUCKET_BASE = "https://public-corpora.docketdrafter.com"
 
 
 def _library(corpus):
