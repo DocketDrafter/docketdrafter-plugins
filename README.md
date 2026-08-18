@@ -72,6 +72,14 @@ Before using these plugins, open **Claude Settings → Capabilities → Domain a
 The first time you use a plugin, Claude downloads and verifies its legal library. After that,
 the plugin uses the copy installed in that environment.
 
+<p align="center">
+  <a href="https://youtu.be/2k8PBYFlorQ">
+    <img src="assets/legal-libraries-cowork-tutorial.png" alt="Watch the DocketDrafter Legal Libraries installation and use tutorial" width="700">
+  </a>
+</p>
+
+[Watch the installation and use tutorial on YouTube →](https://youtu.be/2k8PBYFlorQ)
+
 ### Available plugins
 
 | Plugin | Includes |
