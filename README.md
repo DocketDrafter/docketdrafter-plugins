@@ -113,7 +113,15 @@ libraries generally omit annotations, editorial commentary, and some historical 
 court-rule coverage is selected rather than comprehensive. Always verify current law, filing
 requirements, and deadlines against an official source.
 
-## Other documentation
+## Practical guides for lawyers
+
+- [Claude for Lawyers: legal research, drafting, and practical workflows](https://docketdrafter.com/claude-for-lawyers)
+- [How to search CourtListener with Claude](https://docketdrafter.com/blog/how-to-search-courtlistener-with-claude)
+- [How to check legal citations with Claude using full-text court opinions](https://docketdrafter.com/blog/how-to-check-legal-citations-with-claude)
+- [How to research federal and local court rules with Claude](https://docketdrafter.com/blog/how-to-research-federal-local-court-rules-with-claude)
+- [How to research the U.S. Code with Claude](https://docketdrafter.com/blog/how-to-research-us-code-with-claude)
+
+## Developer and coverage documentation
 
 - [Claude Code installation](docs/claude-code.md)
 - [Corpus coverage and currency](docs/corpus-coverage.md)
