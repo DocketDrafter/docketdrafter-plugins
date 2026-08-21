@@ -2,7 +2,7 @@
   "manifest_version": "0.4",
   "name": "courtlistener",
   "display_name": "CourtListener by DocketDrafter",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "Search CourtListener opinions and RECAP dockets, download public court materials, and reuse a persistent local research library.",
   "long_description": "Connects Claude to CourtListener, the free public database of American court opinions and PACER filings maintained by the Free Law Project. Opinions and PDFs are saved to a persistent research library folder on this computer so they can be reused across conversations.\n\nRequires a free CourtListener API key. Create or view yours at https://www.courtlistener.com/profile/api-token/",
   "author": {

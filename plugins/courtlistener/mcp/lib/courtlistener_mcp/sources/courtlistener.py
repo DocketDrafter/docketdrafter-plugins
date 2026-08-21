@@ -220,6 +220,38 @@ def fetch_cluster(cluster_id: int) -> dict:
     return get(f"{API_BASE_URL}/clusters/{cluster_id}/", headers=auth_headers()).json()
 
 
+def sibling_opinion_ids(cluster: dict) -> list[int]:
+    """Return every opinion id in a cluster, lead opinion first.
+
+    A cluster holds the lead opinion plus any concurrences, dissents, and (for
+    older cases) a legacy combined-text record. Each is a separate opinion with
+    its own id and its own set of citing opinions, so a later-treatment search
+    against one id silently undercounts: for Jerman v. Carlisle, the lead
+    opinion alone matches 48 citing opinions against 175 for the whole cluster.
+    Always search the union.
+    """
+    ids: list[int] = []
+    for url in cluster.get("sub_opinions") or []:
+        tail = str(url).rstrip("/").rsplit("/", 1)[-1]
+        if tail.isdigit():
+            ids.append(int(tail))
+    return ids
+
+
+def build_cites_query(opinion_ids: list[int], text: str | None = None) -> str:
+    """Build a search query matching opinions that cite any of ``opinion_ids``.
+
+    ``text`` narrows to citing opinions that also contain the given terms —
+    useful for surfacing critical treatment (e.g. "declined to follow") without
+    reading every citing case.
+    """
+    if not opinion_ids:
+        raise ValueError("no opinion ids to search for")
+    clause = f"cites:({' OR '.join(str(i) for i in opinion_ids)})"
+    text = (text or "").strip()
+    return f"{clause} AND ({text})" if text else clause
+
+
 def fetch_opinion(opinion_id: int) -> dict:
     params = {"fields": "id,html_with_citations,plain_text,type,author_id"}
     return get(

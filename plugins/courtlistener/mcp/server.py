@@ -234,7 +234,7 @@ number, and citation format.
 PROTOCOL_VERSION = "2025-06-18"
 SUPPORTED_PROTOCOL_VERSIONS = {"2024-11-05", "2025-03-26", "2025-06-18"}
 SERVER_NAME = "courtlistener"
-SERVER_VERSION = "0.0.8"
+SERVER_VERSION = "0.0.9"
 
 
 
@@ -523,6 +523,109 @@ def tool_search_opinions(args: dict[str, Any]) -> str:
             f"  {result.get('caseName', '?')}  [{citations}]  "
             f"({result.get('court', '?')}, {result.get('dateFiled', '?')}, {status})\n"
             f"    {url}"
+        )
+    return "\n".join(lines)
+
+
+def tool_find_citing_opinions(args: dict[str, Any]) -> str:
+    """List opinions that cite a target case, newest first."""
+    from courtlistener_mcp.courts import require_court
+    from courtlistener_mcp.http import get as http_get
+    from courtlistener_mcp.sources.courtlistener import (
+        API_BASE_URL,
+        auth_headers,
+        build_cites_query,
+        fetch_cluster,
+        lookup_citation,
+        parse_opinion_url,
+        sibling_opinion_ids,
+    )
+
+    citation = str(args.get("citation", "")).strip()
+    url = str(args.get("url", "")).strip()
+    cluster_id_arg = args.get("cluster_id")
+    provided = [bool(citation), bool(url), cluster_id_arg is not None]
+    if sum(provided) != 1:
+        raise ValueError("provide exactly one of citation, url, or cluster_id")
+
+    if citation:
+        cluster_id = lookup_citation(citation)
+        target = citation
+    elif url:
+        cluster_id = parse_opinion_url(url)
+        target = url
+    else:
+        cluster_id = int(cluster_id_arg)
+        target = f"cluster {cluster_id}"
+
+    cluster = fetch_cluster(cluster_id)
+    opinion_ids = sibling_opinion_ids(cluster)
+    if not opinion_ids:
+        return (
+            f"No opinion records found for {target} (cluster {cluster_id}), so its "
+            "citing opinions cannot be searched."
+        )
+
+    limit = _clamped(args, "limit", default=20, low=1, high=50)
+    params = {
+        "q": build_cites_query(opinion_ids, args.get("query")),
+        "type": "o",
+        "order_by": "dateFiled desc",
+    }
+
+    case_name = cluster.get("case_name") or target
+    preamble = [
+        f"Citing opinions for {case_name} (cluster {cluster_id}, "
+        f"{len(opinion_ids)} opinion record(s) searched).",
+    ]
+
+    court_id = args.get("court")
+    if court_id:
+        court = require_court(str(court_id))
+        params["court"] = court.court_id
+        preamble.append(f"Court filter resolved: {court.court_id} — {court.full_name}")
+    filed_after = str(args.get("filed_after", "")).strip()
+    if filed_after:
+        params["filed_after"] = filed_after
+        preamble.append(f"Filed on or after: {filed_after}")
+
+    response = http_get(
+        f"{API_BASE_URL}/search/", headers=auth_headers(), params=params, timeout=60
+    )
+    response.raise_for_status()
+    data = response.json()
+
+    results = data.get("results", [])
+    if not results:
+        return "\n".join(preamble + ["", "No citing opinions found."])
+
+    total = data.get("count", len(results))
+    lines = preamble + [
+        "",
+        f"Found {total} citing opinions (showing {min(len(results), limit)}, newest first):",
+        "",
+    ]
+    for result in results[:limit]:
+        citations = ", ".join(result.get("citation", []) or []) or "no reporter cite"
+        status = result.get("status") or result.get("precedentialStatus") or "?"
+        result_url = f"https://www.courtlistener.com{result.get('absolute_url', '')}"
+        lines.append(
+            f"  {result.get('caseName', '?')}  [{citations}]  "
+            f"({result.get('court', '?')}, {result.get('dateFiled', '?')}, {status})\n"
+            f"    {result_url}"
+        )
+    lines += [
+        "",
+        "Scope: this is a citation list, not a treatment signal. It does NOT show "
+        "whether any of these opinions followed, distinguished, limited, criticized, "
+        "or overruled the target, and it does not establish that the target is still "
+        "good law. To assess later treatment, retrieve these opinions with "
+        "get_opinions and read how each one actually treats the target.",
+    ]
+    if total > limit:
+        lines.append(
+            f"Only {limit} of {total} shown. Narrow with court, filed_after, or query "
+            "rather than assuming the rest are irrelevant."
         )
     return "\n".join(lines)
 
@@ -1322,6 +1425,60 @@ TOOLS: list[dict[str, Any]] = [
             "additionalProperties": False,
         },
         "handler": tool_verify_citations,
+    },
+    {
+        "name": "find_citing_opinions",
+        "description": (
+            "Find later opinions that cite a target case — the first step in "
+            "assessing how a case has been treated since it was decided. "
+            "Identify the target by exactly one of citation, url, or cluster_id. "
+            "Searches every opinion record in the case (lead opinion, "
+            "concurrences, dissents), because each has its own citing set and "
+            "searching only one undercounts badly. Results are newest first, "
+            "since the usual question is what has happened recently. "
+            "IMPORTANT: this returns a citation list, NOT a treatment signal. It "
+            "does not show whether a citing case followed, distinguished, "
+            "limited, criticized, or overruled the target, and it never "
+            "establishes that the target is still good law. To characterize "
+            "treatment you MUST retrieve the citing opinions with get_opinions "
+            "and read them. Use the query parameter to surface likely negative "
+            "treatment, and court/filed_after to narrow a long list."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "citation": {
+                    "type": "string",
+                    "description": 'Citation of the target case, e.g. "559 U.S. 573". Provide exactly one of citation, url, or cluster_id.',
+                },
+                "url": {
+                    "type": "string",
+                    "description": "CourtListener opinion URL of the target case. Provide exactly one of citation, url, or cluster_id.",
+                },
+                "cluster_id": {
+                    "type": "integer",
+                    "description": "CourtListener cluster ID of the target case. Provide exactly one of citation, url, or cluster_id.",
+                },
+                "query": {
+                    "type": "string",
+                    "description": 'Optional terms the citing opinion must also contain, e.g. abrogated OR overruled. Narrows toward critical treatment; it never proves it. Prefer distinctive terms and quoted phrases: common legal words barely filter at all — for Jerman, "limited" matches 151 of 175 citing opinions because of phrases like "limited liability", while "abrogated OR overruled" matches 38. Always compare the filtered count against the unfiltered one before treating a result as narrowed.',
+                },
+                "court": {
+                    "type": "string",
+                    "description": "Optional court ID filter for the citing opinions; resolve it with search_courts first",
+                },
+                "filed_after": {
+                    "type": "string",
+                    "description": 'Only citing opinions filed on or after this ISO date, e.g. "2020-01-01"',
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum citing opinions to show (default 20, maximum 50)",
+                },
+            },
+            "additionalProperties": False,
+        },
+        "handler": tool_find_citing_opinions,
     },
     {
         "name": "search_recap",

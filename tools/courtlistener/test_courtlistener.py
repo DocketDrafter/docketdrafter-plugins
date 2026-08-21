@@ -789,5 +789,60 @@ class VerifyCitations(unittest.TestCase):
         self.assertIn("Split the document", str(ctx.exception))
 
 
+class CitingOpinions(unittest.TestCase):
+    """Later-treatment search must cover every opinion record in a cluster.
+
+    Regression for the undercount trap: Jerman v. Carlisle's lead opinion alone
+    matches 48 citing opinions, the whole cluster 175. Searching one id looks
+    like a working citator while silently hiding most of the treatment.
+    """
+
+    def test_all_sibling_opinions_collected(self) -> None:
+        from courtlistener_mcp.sources.courtlistener import sibling_opinion_ids
+
+        cluster = {
+            "sub_opinions": [
+                "https://www.courtlistener.com/api/rest/v4/opinions/2357/",
+                "https://www.courtlistener.com/api/rest/v4/opinions/9413270/",
+                "https://www.courtlistener.com/api/rest/v4/opinions/9413273/",
+            ]
+        }
+        self.assertEqual(sibling_opinion_ids(cluster), [2357, 9413270, 9413273])
+
+    def test_missing_or_malformed_sub_opinions(self) -> None:
+        from courtlistener_mcp.sources.courtlistener import sibling_opinion_ids
+
+        self.assertEqual(sibling_opinion_ids({}), [])
+        self.assertEqual(sibling_opinion_ids({"sub_opinions": None}), [])
+        # A non-numeric tail must be skipped, not crash or become a bogus id.
+        self.assertEqual(
+            sibling_opinion_ids({"sub_opinions": ["/opinions/abc/", "/opinions/7/"]}),
+            [7],
+        )
+
+    def test_query_unions_every_sibling(self) -> None:
+        from courtlistener_mcp.sources.courtlistener import build_cites_query
+
+        self.assertEqual(
+            build_cites_query([2357, 9413270]), "cites:(2357 OR 9413270)"
+        )
+
+    def test_query_text_filter_is_anded(self) -> None:
+        from courtlistener_mcp.sources.courtlistener import build_cites_query
+
+        self.assertEqual(
+            build_cites_query([7], '"declined to follow"'),
+            'cites:(7) AND ("declined to follow")',
+        )
+        # Whitespace-only text must not produce a dangling AND ().
+        self.assertEqual(build_cites_query([7], "   "), "cites:(7)")
+
+    def test_empty_ids_rejected(self) -> None:
+        from courtlistener_mcp.sources.courtlistener import build_cites_query
+
+        with self.assertRaises(ValueError):
+            build_cites_query([])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

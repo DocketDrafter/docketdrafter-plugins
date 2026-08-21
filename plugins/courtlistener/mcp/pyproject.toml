@@ -1,6 +1,6 @@
 [project]
 name = "docketdrafter-courtlistener-mcp"
-version = "0.0.8"
+version = "0.0.9"
 description = "CourtListener and RECAP research connector for Claude"
 requires-python = ">=3.10"
 dependencies = [
