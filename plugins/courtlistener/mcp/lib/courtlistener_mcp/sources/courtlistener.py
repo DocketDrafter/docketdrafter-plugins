@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from html import escape
 from pathlib import Path
 from typing import Any
@@ -11,13 +12,30 @@ from urllib.parse import parse_qs, urlparse
 
 from bs4 import BeautifulSoup
 
-from courtlistener_mcp.config import ensure_directory, get_api_key, get_data_dir
+from courtlistener_mcp.config import (
+    ensure_directory,
+    get_api_key,
+    get_data_dir,
+    write_text_atomic,
+)
 from courtlistener_mcp.http import HttpError, get, post
 from courtlistener_mcp.models import SavedSource
 from courtlistener_mcp.text import sanitize_filename
 
 API_BASE_URL = "https://www.courtlistener.com/api/rest/v4"
 COURTLISTENER_BASE_URL = "https://www.courtlistener.com"
+
+
+def log(message: str) -> None:
+    """Print a progress line immediately.
+
+    Progress goes to stderr, never stdout: on a stdio MCP transport stdout
+    carries the JSON-RPC stream, and anything else written there corrupts the
+    protocol. Keeping progress on stderr is also what lets the server dispatch
+    requests concurrently — a process-wide stdout redirect could not be made
+    thread-safe.
+    """
+    print(message, file=sys.stderr, flush=True)
 
 
 class CitationNotFoundError(Exception):
@@ -589,7 +607,7 @@ def search_opinions(
     page = 1
 
     while url:
-        print(f"Fetching search results page {page}...", flush=True)
+        log(f"Fetching search results page {page}...")
         response = get(
             url,
             headers=auth_headers(),
@@ -598,16 +616,15 @@ def search_opinions(
         data = response.json()
         results = data.get("results", [])
         all_results.extend(results)
-        print(f"  Found {len(results)} results (total: {len(all_results)})", flush=True)
+        log(f"  Found {len(results)} results (total: {len(all_results)})")
 
         if max_results is not None and len(all_results) >= max_results:
-            print(f"  Reached the requested maximum of {max_results}; stopping.", flush=True)
+            log(f"  Reached the requested maximum of {max_results}; stopping.")
             return all_results[:max_results]
         if page >= max_pages:
-            print(
+            log(
                 f"  Stopping at the {max_pages}-page safety limit; "
-                "narrow the query for complete coverage.",
-                flush=True,
+                "narrow the query for complete coverage."
             )
             break
 
@@ -644,10 +661,15 @@ def download_opinion_by_cluster_id(
     html_path = case_dir / "opinion.html"
     opinion_path = case_dir / "opinion.md"
     opinion_markdown = opinion_markdown_content(opinion)
-    html_path.write_text(html_content, encoding="utf-8")
-    opinion_path.write_text(opinion_markdown, encoding="utf-8")
-    (case_dir / "metadata.json").write_text(
-        json.dumps(metadata, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    write_text_atomic(html_path, html_content)
+    write_text_atomic(opinion_path, opinion_markdown)
+    # metadata.json is written last. _complete_saved_case checks the opinion
+    # files and then metadata, so writing metadata last means a concurrent
+    # reader never sees a case directory count as complete before the opinion
+    # files it describes are fully on disk.
+    write_text_atomic(
+        case_dir / "metadata.json",
+        json.dumps(metadata, indent=2, ensure_ascii=False) + "\n",
     )
     absolute_url = cluster.get("absolute_url", "")
     full_url = f"https://www.courtlistener.com{absolute_url}" if absolute_url else ""
@@ -667,9 +689,9 @@ def fetch_by_url(
 ) -> SavedSource:
     cluster_id = parse_opinion_url(url)
     if not refresh and (saved := find_saved_by_cluster_id(cluster_id, output_dir)):
-        print(f"Using saved opinion: {saved.path}")
+        log(f"Using saved opinion: {saved.path}")
         return saved
-    print(f"Fetching cluster {cluster_id}...")
+    log(f"Fetching cluster {cluster_id}...")
     return download_opinion_by_cluster_id(
         cluster_id,
         output_dir=output_dir,
@@ -683,13 +705,13 @@ def fetch_by_citation(
     refresh: bool = False,
 ) -> SavedSource:
     if not refresh and (saved := find_saved_by_citation(citation, output_dir)):
-        print(f"Using saved opinion: {saved.path}")
+        log(f"Using saved opinion: {saved.path}")
         return saved
-    print(f"Looking up citation: {citation}")
+    log(f"Looking up citation: {citation}")
     cluster_id = lookup_citation(citation)
-    print(f"Found cluster {cluster_id}")
+    log(f"Found cluster {cluster_id}")
     if not refresh and (saved := find_saved_by_cluster_id(cluster_id, output_dir)):
-        print(f"Using saved opinion: {saved.path}")
+        log(f"Using saved opinion: {saved.path}")
         return saved
     return download_opinion_by_cluster_id(
         cluster_id,
@@ -707,12 +729,12 @@ def fetch_search_results(
 ) -> list[SavedSource]:
     params = parse_search_url(search_url)
     if params.get("type") != "o":
-        print("Warning: Search type is not 'o' (opinions). Setting type=o.", flush=True)
+        log("Warning: Search type is not 'o' (opinions). Setting type=o.")
         params["type"] = "o"
 
     results = search_opinions(params, max_results=limit)
     directory = ensure_directory(output_dir or default_cases_dir())
-    print(f"\nFound {len(results)} opinions to download into {directory}", flush=True)
+    log(f"\nFound {len(results)} opinions to download into {directory}")
     saved: list[SavedSource] = []
     failed: list[tuple[int, str, str]] = []
     skipped_missing_cluster_id = 0
@@ -723,16 +745,16 @@ def fetch_search_results(
         case_name = result.get("caseName", "unknown")
         if not cluster_id:
             skipped_missing_cluster_id += 1
-            print(f"[{index}/{len(results)}] Skipping result without cluster_id: {case_name}", flush=True)
+            log(f"[{index}/{len(results)}] Skipping result without cluster_id: {case_name}")
             continue
         absolute_url = result.get("absolute_url", "")
         case_id = _case_id(cluster_id, absolute_url)
         case_dir = directory / str(case_id)
         if skip_existing and _complete_saved_case(case_dir):
             skipped_existing += 1
-            print(f"[{index}/{len(results)}] Skipping existing: {case_name} -> {case_dir}", flush=True)
+            log(f"[{index}/{len(results)}] Skipping existing: {case_name} -> {case_dir}")
             continue
-        print(f"[{index}/{len(results)}] Downloading: {case_name} -> {case_dir}", flush=True)
+        log(f"[{index}/{len(results)}] Downloading: {case_name} -> {case_dir}")
         try:
             saved_source = download_opinion_by_cluster_id(
                 cluster_id,
@@ -740,23 +762,22 @@ def fetch_search_results(
             )
         except (HttpError, TimeoutError) as exc:
             failed.append((index, case_name, str(exc)))
-            print(f"[{index}/{len(results)}] Failed: {case_name}: {exc}", flush=True)
+            log(f"[{index}/{len(results)}] Failed: {case_name}: {exc}")
             continue
         saved.append(saved_source)
-        print(f"[{index}/{len(results)}] Saved: {saved_source.path}", flush=True)
+        log(f"[{index}/{len(results)}] Saved: {saved_source.path}")
 
-    print(
+    log(
         "\nDownload summary: "
         f"downloaded={len(saved)}, "
         f"skipped_existing={skipped_existing}, "
         f"skipped_missing_cluster_id={skipped_missing_cluster_id}, "
         f"failed={len(failed)}, "
-        f"total_results={len(results)}",
-        flush=True,
+        f"total_results={len(results)}"
     )
     if failed:
-        print("Failed opinions:", flush=True)
+        log("Failed opinions:")
         for index, case_name, error in failed:
-            print(f"  [{index}/{len(results)}] {case_name}: {error}", flush=True)
+            log(f"  [{index}/{len(results)}] {case_name}: {error}")
 
     return saved

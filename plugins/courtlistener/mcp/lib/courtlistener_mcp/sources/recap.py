@@ -12,7 +12,12 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode, urlparse
 
-from courtlistener_mcp.config import ensure_directory, get_data_dir
+from courtlistener_mcp.config import (
+    ensure_directory,
+    get_data_dir,
+    write_bytes_atomic,
+    write_text_atomic,
+)
 from courtlistener_mcp.http import get
 from courtlistener_mcp.sources.courtlistener import API_BASE_URL, auth_headers
 from courtlistener_mcp.text import sanitize_filename
@@ -150,7 +155,7 @@ def _cached_json_get(
     data = response.json()
     log(f"  api GET done {response.url} -> {response.status_code} ({elapsed:.3f}s)")
     if cache_path is not None:
-        cache_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        write_text_atomic(cache_path, json.dumps(data, indent=2, ensure_ascii=False))
         log(f"  cache WRITE {cache_path}")
     return data
 
@@ -577,7 +582,7 @@ def pdf_filename(doc: RecapDocumentRef) -> str:
 
 
 def write_json(path: Path, data: Any) -> None:
-    path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    write_text_atomic(path, json.dumps(data, indent=2, ensure_ascii=False))
 
 
 def write_manifest(
@@ -619,7 +624,7 @@ def write_manifest(
         if doc.document_id in pdf_paths:
             lines.append(f"- PDF: {pdf_paths[doc.document_id]}")
         lines.append("")
-    path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+    write_text_atomic(path, "\n".join(lines).rstrip() + "\n")
 
 
 def download_document(doc: RecapDocumentRef, pdf_dir: Path, *, overwrite: bool = False) -> Path | None:
@@ -635,6 +640,6 @@ def download_document(doc: RecapDocumentRef, pdf_dir: Path, *, overwrite: bool =
     log(f"  pdf GET start {doc.storage_url}")
     started = time.time()
     response = get(doc.storage_url, timeout=120)
-    output_path.write_bytes(response.content)
+    write_bytes_atomic(output_path, response.content)
     log(f"  pdf WRITE {output_path} ({len(response.content)} bytes, {time.time() - started:.3f}s)")
     return output_path

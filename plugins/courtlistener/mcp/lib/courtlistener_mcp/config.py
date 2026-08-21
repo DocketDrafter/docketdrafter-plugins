@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import tempfile
 from pathlib import Path
 
 DEFAULT_DATA_DIR = Path.home() / "Documents" / "CourtListener Library"
@@ -86,3 +87,37 @@ def ensure_directory(path: Path) -> Path:
     """Create a directory if needed and return it."""
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def _replace_atomically(path: Path, data: bytes) -> None:
+    """Write ``data`` to ``path`` so readers never observe a partial file.
+
+    The server handles requests concurrently, so two in-flight requests can
+    fetch the same opinion or docket and write the same path at the same time.
+    A plain write lets a reader — or the loser of the race — see a truncated
+    file. Writing to a temp file in the *same* directory and then renaming
+    makes the swap atomic on POSIX, so a path always holds either the old
+    complete contents or the new complete contents.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    tmp = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
+def write_text_atomic(path: Path, text: str, encoding: str = "utf-8") -> None:
+    """Atomically write text to ``path``. See :func:`_replace_atomically`."""
+    _replace_atomically(path, text.encode(encoding))
+
+
+def write_bytes_atomic(path: Path, data: bytes) -> None:
+    """Atomically write bytes to ``path``. See :func:`_replace_atomically`."""
+    _replace_atomically(path, data)

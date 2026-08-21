@@ -17,15 +17,15 @@ key never appears in conversation, in a command line, or in a plaintext file.
 from __future__ import annotations
 
 import base64
-import contextlib
 import importlib
-import io
 import json
 import os
 import shutil
 import subprocess
 import sys
+import threading
 import traceback
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
@@ -234,7 +234,7 @@ number, and citation format.
 PROTOCOL_VERSION = "2025-06-18"
 SUPPORTED_PROTOCOL_VERSIONS = {"2024-11-05", "2025-03-26", "2025-06-18"}
 SERVER_NAME = "courtlistener"
-SERVER_VERSION = "0.0.7"
+SERVER_VERSION = "0.0.8"
 
 
 
@@ -314,23 +314,6 @@ def _apply_library_env() -> None:
     library = _library_dir()
     if library:
         os.environ["COURTLISTENER_DATA_DIR"] = str(library)
-
-
-@contextlib.contextmanager
-def _captured_stdout():
-    """Redirect library ``print`` output away from the JSON-RPC stream.
-
-    ``courtlistener_mcp`` prints progress while paging search results. On a
-    stdio transport that output would corrupt the protocol, so it is captured
-    and re-emitted on stderr.
-    """
-    buffer = io.StringIO()
-    with contextlib.redirect_stdout(buffer):
-        yield buffer
-    captured = buffer.getvalue().strip()
-    if captured:
-        for line in captured.splitlines():
-            log(f"lib: {line}")
 
 
 # ---------------------------------------------------------------------------
@@ -517,12 +500,11 @@ def tool_search_opinions(args: dict[str, Any]) -> str:
         params["court"] = court.court_id
         preamble.append(f"Court filter resolved: {court.court_id} — {court.full_name}")
 
-    with _captured_stdout():
-        response = http_get(
-            f"{API_BASE_URL}/search/", headers=auth_headers(), params=params, timeout=60
-        )
-        response.raise_for_status()
-        data = response.json()
+    response = http_get(
+        f"{API_BASE_URL}/search/", headers=auth_headers(), params=params, timeout=60
+    )
+    response.raise_for_status()
+    data = response.json()
 
     results = data.get("results", [])
     if not results:
@@ -590,12 +572,11 @@ def tool_get_opinions(args: dict[str, Any]) -> str:
     for kind, value in jobs:
         entry: dict[str, Any] = {"requested": value}
         try:
-            with _captured_stdout():
-                saved = (
-                    fetch_by_citation(value, output_dir=output_dir, refresh=refresh)
-                    if kind == "citation"
-                    else fetch_by_url(value, output_dir=output_dir, refresh=refresh)
-                )
+            saved = (
+                fetch_by_citation(value, output_dir=output_dir, refresh=refresh)
+                if kind == "citation"
+                else fetch_by_url(value, output_dir=output_dir, refresh=refresh)
+            )
         except MultipleCitationMatchesError as exc:
             entry.update(status="ambiguous", detail=str(exc))
         except CitationNotFoundError as exc:
@@ -643,8 +624,7 @@ def tool_verify_citations(args: dict[str, Any]) -> str:
     if citations:
         text = "\n".join(citations)
 
-    with _captured_stdout():
-        results = verify_citations_in_text(text)
+    results = verify_citations_in_text(text)
 
     counts: dict[str, int] = {}
     for r in results:
@@ -683,12 +663,11 @@ def tool_search_recap(args: dict[str, Any]) -> str:
         params["court"] = court.court_id
         preamble.append(f"Court filter resolved: {court.court_id} — {court.full_name}")
 
-    with _captured_stdout():
-        response = http_get(
-            f"{API_BASE_URL}/search/", headers=auth_headers(), params=params, timeout=60
-        )
-        response.raise_for_status()
-        data = response.json()
+    response = http_get(
+        f"{API_BASE_URL}/search/", headers=auth_headers(), params=params, timeout=60
+    )
+    response.raise_for_status()
+    data = response.json()
 
     results = data.get("results", [])
     if not results:
@@ -1041,50 +1020,49 @@ def tool_download_docket_pdfs(args: dict[str, Any]) -> str:
         )
     include_attachments = bool(args.get("include_attachments", False))
 
-    with _captured_stdout():
-        docket = _resolve_docket(args, cache_dir, use_cache=use_cache)
-        docket_id = int(docket["id"])
-        entries, documents = _collect_documents(
-            docket_id, args, cache_dir, use_cache=use_cache
-        )
-        # Entry and visible document numbers can match many attachments. Keep
-        # only main documents unless attachments were explicitly requested.
-        # Exact RECAP IDs are already unambiguous and may identify an attachment.
-        if not include_attachments and not exact_ids:
-            documents = [
-                doc for doc in documents if doc.attachment_number in (None, "")
-            ]
+    docket = _resolve_docket(args, cache_dir, use_cache=use_cache)
+    docket_id = int(docket["id"])
+    entries, documents = _collect_documents(
+        docket_id, args, cache_dir, use_cache=use_cache
+    )
+    # Entry and visible document numbers can match many attachments. Keep
+    # only main documents unless attachments were explicitly requested.
+    # Exact RECAP IDs are already unambiguous and may identify an attachment.
+    if not include_attachments and not exact_ids:
+        documents = [
+            doc for doc in documents if doc.attachment_number in (None, "")
+        ]
 
-        out_dir = ensure_directory(docket_output_dir(docket, data_dir=library))
-        pdf_dir = ensure_directory(out_dir / "pdfs")
-        saved: dict[int, Path] = {}
-        reused = 0
-        unavailable = 0
-        remaining: list[Any] = []
-        for doc in documents:
-            # The cap counts new network downloads only. Files already on disk
-            # are free to acknowledge, and skipping them would make repeated
-            # calls report less and less while doing the same work.
-            already = (pdf_dir / pdf_filename(doc)).exists() and not overwrite
-            new_downloads = len(saved) - reused
-            if not already and new_downloads >= max_pdfs:
-                if doc.is_available and doc.filepath_local:
-                    remaining.append(doc)
-                else:
-                    unavailable += 1
-                continue
-            path = download_document(doc, pdf_dir, overwrite=overwrite)
-            if path:
-                saved[doc.document_id] = path
-                if already:
-                    reused += 1
+    out_dir = ensure_directory(docket_output_dir(docket, data_dir=library))
+    pdf_dir = ensure_directory(out_dir / "pdfs")
+    saved: dict[int, Path] = {}
+    reused = 0
+    unavailable = 0
+    remaining: list[Any] = []
+    for doc in documents:
+        # The cap counts new network downloads only. Files already on disk
+        # are free to acknowledge, and skipping them would make repeated
+        # calls report less and less while doing the same work.
+        already = (pdf_dir / pdf_filename(doc)).exists() and not overwrite
+        new_downloads = len(saved) - reused
+        if not already and new_downloads >= max_pdfs:
+            if doc.is_available and doc.filepath_local:
+                remaining.append(doc)
             else:
                 unavailable += 1
-        write_json(out_dir / "docket.json", docket)
-        write_json(out_dir / "entries.json", entries)
-        write_manifest(
-            out_dir / "manifest.md", docket=docket, docs=documents, pdf_paths=saved
-        )
+            continue
+        path = download_document(doc, pdf_dir, overwrite=overwrite)
+        if path:
+            saved[doc.document_id] = path
+            if already:
+                reused += 1
+        else:
+            unavailable += 1
+    write_json(out_dir / "docket.json", docket)
+    write_json(out_dir / "entries.json", entries)
+    write_manifest(
+        out_dir / "manifest.md", docket=docket, docs=documents, pdf_paths=saved
+    )
 
     lines = [
         f"Docket {docket_id}: {docket.get('case_name', '?')}",
@@ -1145,8 +1123,7 @@ def tool_download_search_results(args: dict[str, Any]) -> str:
         params = parse_search_url(search_url)
         if params.get("type") != "o":
             params["type"] = "o"
-        with _captured_stdout():
-            results = search_opinions(params, max_results=limit)
+        results = search_opinions(params, max_results=limit)
         if not results:
             return "No results found for that search URL."
         lines = [
@@ -1169,13 +1146,12 @@ def tool_download_search_results(args: dict[str, Any]) -> str:
             "No CourtListener Library folder is configured. Set it in the "
             "connector settings before downloading opinions."
         )
-    with _captured_stdout():
-        saved = fetch_search_results(
-            search_url,
-            output_dir=library / "cases",
-            limit=limit,
-            skip_existing=bool(args.get("skip_existing", True)),
-        )
+    saved = fetch_search_results(
+        search_url,
+        output_dir=library / "cases",
+        limit=limit,
+        skip_existing=bool(args.get("skip_existing", True)),
+    )
     lines = [f"Saved {len(saved)} opinions to {library / 'cases'}", ""]
     lines.extend(f"  {item.description} -> {item.path}" for item in saved[:50])
     if len(saved) > 50:
@@ -1661,6 +1637,41 @@ def handle_request(message: dict[str, Any]) -> dict[str, Any] | None:
     return _error(request_id, -32601, f"Method not found: {method}")
 
 
+# Requests are dispatched to a small thread pool so one slow tool call — a
+# multi-opinion fetch, a paged search — cannot block every other in-flight
+# request. Threads (not asyncio) because the tool bodies underneath are all
+# synchronous blocking I/O: urllib3 fetches and library file writes.
+#
+# The cap is deliberately low. Raising it does not make CourtListener answer
+# faster; it just converts a local queue into remote rate-limit rejections.
+MAX_CONCURRENT_REQUESTS = 6
+
+# stdout carries the JSON-RPC stream, so exactly one thread may write at a
+# time. Without this lock two responses can interleave mid-line and corrupt
+# the protocol.
+_stdout_lock = threading.Lock()
+
+
+def _write_response(response: dict[str, Any]) -> None:
+    """Emit one JSON-RPC response atomically."""
+    payload = json.dumps(response) + "\n"
+    with _stdout_lock:
+        sys.stdout.write(payload)
+        sys.stdout.flush()
+
+
+def _serve_request(message: dict[str, Any]) -> None:
+    """Handle one request and write its response, if it has one."""
+    try:
+        response = handle_request(message)
+    except Exception as exc:
+        log(f"dispatch failed: {exc}\n{traceback.format_exc()}")
+        response = _error(message.get("id"), -32603, f"Internal error: {exc}")
+
+    if response is not None:
+        _write_response(response)
+
+
 def main() -> None:
     log(f"starting v{SERVER_VERSION} (python {sys.version.split()[0]}, lib {LIB_DIR})")
     _scrub_unresolved_templates()
@@ -1668,28 +1679,35 @@ def main() -> None:
     library = _library_dir()
     log(f"library: {library or 'not configured'}")
     log(f"api key: {'present' if os.getenv('COURTLISTENER_API_KEY') else 'absent'}")
+    log(f"max concurrent requests: {MAX_CONCURRENT_REQUESTS}")
 
-    for line in sys.stdin:
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            message = json.loads(line)
-        except json.JSONDecodeError as exc:
-            log(f"skipping unparseable line: {exc}")
-            continue
+    with ThreadPoolExecutor(
+        max_workers=MAX_CONCURRENT_REQUESTS,
+        thread_name_prefix="courtlistener",
+    ) as pool:
+        for line in sys.stdin:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                message = json.loads(line)
+            except json.JSONDecodeError as exc:
+                log(f"skipping unparseable line: {exc}")
+                continue
 
-        try:
-            response = handle_request(message)
-        except Exception as exc:
-            log(f"dispatch failed: {exc}\n{traceback.format_exc()}")
-            response = _error(message.get("id"), -32603, f"Internal error: {exc}")
+            # `initialize` establishes protocol state every later request
+            # depends on, so it is handled inline rather than raced against
+            # whatever arrives next.
+            if message.get("method") == "initialize":
+                _serve_request(message)
+            else:
+                pool.submit(_serve_request, message)
 
-        if response is not None:
-            sys.stdout.write(json.dumps(response) + "\n")
-            sys.stdout.flush()
+        # Leaving the `with` block drains in-flight requests before exit, so a
+        # response is never lost to a half-finished tool call.
+        log("stdin closed, draining in-flight requests")
 
-    log("stdin closed, exiting")
+    log("exiting")
 
 
 if __name__ == "__main__":
