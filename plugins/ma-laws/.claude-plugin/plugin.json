@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "ma-laws",
+  "displayName": "Massachusetts Laws",
+  "version": "0.2.0",
+  "description": "Look up and search the Massachusetts General Laws using a verified local corpus downloaded on first use",
+  "author": {
+    "name": "DocketDrafter",
+    "email": "tommy@docketdrafter.com",
+    "url": "https://github.com/tommy-docketdrafter"
+  },
+  "homepage": "https://github.com/DocketDrafter/docketdrafter-plugins",
+  "repository": "https://github.com/DocketDrafter/docketdrafter-plugins",
+  "license": "BSD-3-Clause",
+  "keywords": ["massachusetts", "general-laws", "statutes", "legal-research"]
+}

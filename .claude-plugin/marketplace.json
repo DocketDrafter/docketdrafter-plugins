@@ -89,6 +89,19 @@
       ]
     },
     {
+      "name": "ma-laws",
+      "version": "0.2.0",
+      "source": "./plugins/ma-laws",
+      "description": "Look up and search the Massachusetts General Laws using a verified local corpus downloaded on first use",
+      "category": "Legal",
+      "tags": [
+        "massachusetts",
+        "general-laws",
+        "statutes",
+        "legal-research"
+      ]
+    },
+    {
       "name": "federal-court-rules",
       "version": "0.2.0",
       "source": "./plugins/federal-court-rules",
