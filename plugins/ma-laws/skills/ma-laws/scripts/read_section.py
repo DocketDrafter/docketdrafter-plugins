@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Look up and search the Massachusetts General Laws."""
+"""Look up and search Massachusetts statutes and civil-procedure rules."""
 from __future__ import annotations
 
 import argparse
@@ -26,6 +26,8 @@ class Extractor(HTMLParser):
             self.current = attrs.get("id")
             self.buf = []
         elif self.current and tag == "pre":
+            if self.buf:
+                self.buf.append("\n\nReporter's notes\n\n")
             self.in_pre = True
 
     def handle_endtag(self, tag):
@@ -65,11 +67,37 @@ def parse_citation(value: str) -> tuple[str, str]:
     )
 
 
+def parse_rule_citation(value: str) -> str:
+    value = re.sub(r"\s+", " ", value.strip())
+    patterns = [
+        r"(?i)^(?:mass(?:achusetts)?\.?)?\s*r(?:ules?)?\.?\s*(?:of\s+)?civ(?:il)?\.?\s*p(?:rocedure)?\.?\s*(\d+(?:\.\d+)?)$",
+        r"(?i)^massachusetts\s+(?:rule|rules)\s+of\s+civil\s+procedure\s+(\d+(?:\.\d+)?)$",
+        r"(?i)^(?:civil\s+procedure\s+)?rule\s+(\d+(?:\.\d+)?)$",
+    ]
+    for pattern in patterns:
+        if match := re.match(pattern, value):
+            return match.group(1)
+    raise SystemExit(
+        f"Could not parse Massachusetts rule citation {value!r}; expected e.g. "
+        "'Mass. R. Civ. P. 12' or 'Massachusetts Rule of Civil Procedure 56'."
+    )
+
+
+def is_rule_citation(value: str) -> bool:
+    return bool(re.search(r"(?i)\brule\b|\br\.?\s*(?:civ(?:il)?\.?)\s*p\.?", value))
+
+
 def corpus_root(argument: Path | None) -> Path:
     return argument if argument else ensure_corpus("ma-laws")
 
 
-def resolve(root: Path, citation: str):
+def extract_file(path: Path, anchor: str) -> str:
+    parser = Extractor()
+    parser.feed(path.read_text(encoding="utf-8"))
+    return parser.results.get(anchor, "")
+
+
+def resolve_statute(root: Path, citation: str):
     chapter, section = parse_citation(citation)
     master = load(root / "index.json")
     chapter_entry = master["chapters"].get(chapter.casefold())
@@ -82,9 +110,32 @@ def resolve(root: Path, citation: str):
         nearby = [item["sectionId"] for item in index["sections"].values()
                   if item["sectionId"].casefold().startswith(section[:1].casefold())][:20]
         raise SystemExit(f"Section {section} not found in chapter {chapter}. Nearby: {', '.join(nearby) or 'none'}")
-    parser = Extractor()
-    parser.feed((index_path.parent / entry["path"]).read_text(encoding="utf-8"))
-    return entry, parser.results.get(entry["anchor"], "")
+    return entry, extract_file(index_path.parent / entry["path"], entry["anchor"])
+
+
+def ruleset_index(root: Path) -> tuple[Path, dict]:
+    master = load(root / "index.json")
+    summary = master.get("rulesets", {}).get("MassRCivP")
+    if not summary:
+        raise SystemExit("The installed Massachusetts corpus does not include the Rules of Civil Procedure.")
+    path = root / summary["path"]
+    return path, load(path)
+
+
+def resolve_rule(root: Path, citation: str):
+    number = parse_rule_citation(citation)
+    index_path, index = ruleset_index(root)
+    entry = index["rules"].get(number.casefold())
+    if not entry:
+        nearby = [item["ruleNum"] for item in index["rules"].values()
+                  if item["ruleNum"].startswith(number[:1])][:20]
+        raise SystemExit(f"Massachusetts Rule of Civil Procedure {number} not found. "
+                         f"Nearby: {', '.join(nearby) or 'none'}")
+    return entry, extract_file(index_path.parent / entry["path"], entry["anchor"])
+
+
+def resolve(root: Path, citation: str):
+    return resolve_rule(root, citation) if is_rule_citation(citation) else resolve_statute(root, citation)
 
 
 def list_chapters(root: Path):
@@ -100,6 +151,12 @@ def list_sections(root: Path, chapter: str):
         raise SystemExit(f"Massachusetts General Laws chapter {chapter} not found.")
     index = load(root / item["path"])
     for entry in index["sections"].values():
+        print(f"{entry['citation']} — {entry['title']} | {entry['sourceUrl']}")
+
+
+def list_rules(root: Path):
+    _, index = ruleset_index(root)
+    for entry in index["rules"].values():
         print(f"{entry['citation']} — {entry['title']} | {entry['sourceUrl']}")
 
 
@@ -130,6 +187,25 @@ def search(root: Path, query: str, limit: int, titles_only: bool):
             found += 1
             if found >= limit:
                 return 0
+
+    # Rules are stored as one HTML document per rule rather than chapter files.
+    ruleset = master.get("rulesets", {}).get("MassRCivP")
+    if ruleset:
+        index_path = root / ruleset["path"]
+        index = load(index_path)
+        for entry in index["rules"].values():
+            text = "" if titles_only else extract_file(index_path.parent / entry["path"], entry["anchor"])
+            haystack = entry["title"] if titles_only else entry["title"] + "\n" + text
+            position = haystack.casefold().find(needle)
+            if position < 0:
+                continue
+            print(f"{entry['citation']} — {entry['title']} | {entry['sourceUrl']}")
+            if not titles_only:
+                snippet = re.sub(r"\s+", " ", haystack[max(0, position - 70):position + len(query) + 100])
+                print(f"  …{snippet}…")
+            found += 1
+            if found >= limit:
+                return 0
     if not found:
         print(f"No matches for {query!r}.", file=sys.stderr)
         return 1
@@ -147,12 +223,15 @@ def main():
     parser.add_argument("--limit", type=int, default=50)
     parser.add_argument("--list-chapters", action="store_true")
     parser.add_argument("--list-chapter")
+    parser.add_argument("--list-rules", action="store_true")
     args = parser.parse_args()
     root = corpus_root(args.root)
     if args.list_chapters:
         return list_chapters(root)
     if args.list_chapter:
         return list_sections(root, args.list_chapter)
+    if args.list_rules:
+        return list_rules(root)
     if args.search:
         return search(root, args.search, args.limit, args.titles_only)
     if not args.citations:
