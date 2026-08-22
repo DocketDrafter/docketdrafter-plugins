@@ -128,7 +128,7 @@ def run(server_path: Path, library_dir: Path | None, api_key: str | None) -> int
         response = session.call("tools/list")
         tools = response.get("result", {}).get("tools", [])
         names = [tool["name"] for tool in tools]
-        report.check("tools/list returns 11 tools", len(tools) == 11, f"{len(tools)} found")
+        report.check("tools/list returns 12 tools", len(tools) == 12, f"{len(tools)} found")
         report.check(
             "every tool declares an inputSchema",
             all("inputSchema" in tool for tool in tools),
